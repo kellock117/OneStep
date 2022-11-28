@@ -10,7 +10,7 @@ import (
 var Routes = func(router *mux.Router) {
 	fileServer := http.FileServer(http.Dir("static"))
 	router.Handle("/", fileServer)
-	router.HandleFunc("/GetAllUsers", controllers.ApiGetAllUsers).Methods("GET")
 	router.HandleFunc("/CreateUser", controllers.ApiCreateUser).Methods("POST")
-	router.HandleFunc("/GetUser/{id}", controllers.ApiGetUser).Methods("GET")
+	router.HandleFunc("/Login", controllers.ApiLogin).Methods("POST")
+	router.HandleFunc("/Logout", controllers.ApiLogout).Methods("POST")
 }

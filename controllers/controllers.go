@@ -5,8 +5,6 @@ import (
 	"log"
 	"net/http"
 	"onestep/models"
-
-	"github.com/gorilla/mux"
 )
 
 type response struct {
@@ -27,33 +25,38 @@ func ApiCreateUser(w http.ResponseWriter, r *http.Request) {
 
 	res := response{
 		ID:      userID,
-		Message: "Stock created successfully",
+		Message: "User created successfully",
 	}
 
 	// send the response
 	json.NewEncoder(w).Encode(res)
 }
 
-func ApiGetAllUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := models.GetAllUsers()
+func ApiLogin(w http.ResponseWriter, r *http.Request) {
+	var user models.UserInfo
 
-	if err != nil {
-		log.Fatalf("Unable to get all users. %v", err)
+	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+		log.Fatalf("Unable to decode the request body.  %v", err)
 	}
 
-	// send all the users as response
-	json.NewEncoder(w).Encode(users)
+	cookie, err := models.Login(user)
+
+	if err != nil {
+		json.NewEncoder(w).Encode(err.Error())
+	} else {
+		http.SetCookie(w, cookie)
+		http.Redirect(w, r, "/", 302)
+	}
 }
 
-func ApiGetUser(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	userID := params["id"]
-
-	user, err := models.GetUser(userID)
-
-	if err != nil {
-		log.Fatalf("Unable to get such user. %v", err)
+func ApiLogout(w http.ResponseWriter, r *http.Request) {
+	cookie := &http.Cookie{
+		Name:   "session",
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
 	}
 
-	json.NewEncoder(w).Encode(user)
+	http.SetCookie(w, cookie)
+	http.Redirect(w, r, "/", 302)
 }

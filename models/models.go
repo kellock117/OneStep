@@ -1,10 +1,18 @@
 package models
 
 import (
+	"crypto/aes"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
+	"net/http"
 	"onestep/configs"
+	"os"
+	"strings"
+
+	"github.com/gorilla/securecookie"
+	"github.com/joho/godotenv"
 )
 
 type UserInfo struct {
@@ -12,64 +20,86 @@ type UserInfo struct {
 	PW string `json:"pw"`
 }
 
-func CreateUser(userinfo UserInfo) string {
+func CreateUser(userInfo UserInfo) string {
 	db := configs.CreateConnection()
 	defer db.Close()
 
-	_, err := db.Exec(`INSERT INTO userinfo VALUES (?, ?)`, userinfo.ID, userinfo.PW)
+	if err := godotenv.Load(); err != nil {
+		panic(err)
+	}
+	key := os.Getenv("BLOCK_KEY")
+
+	block, _ := aes.NewCipher([]byte(key))
+	encryptPW := make([]byte, 16)
+
+	userInfo.PW = userInfo.PW + strings.Repeat(os.Getenv("CHAR_TO_FILL_BLANK"), 16-len(userInfo.PW))
+	block.Encrypt(encryptPW, []byte(userInfo.PW))
+
+	_, err := db.Exec(`INSERT INTO userinfo VALUES (?, ?)`, userInfo.ID, hex.EncodeToString(encryptPW))
 	if err != nil {
 		log.Fatalf("Unable to execute the query. %v", err)
 	}
 
-	fmt.Printf("Inserted a single record %v", userinfo.ID)
-	return userinfo.ID
+	fmt.Printf("Inserted a single record %v", userInfo.ID)
+	return userInfo.ID
 }
 
-func GetAllUsers() ([]UserInfo, error) {
+func Login(userInfo UserInfo) (*http.Cookie, error) {
 	db := configs.CreateConnection()
 	defer db.Close()
 
-	var userInfos []UserInfo
-
-	rows, err := db.Query("SELECT * FROM userinfo")
-
-	if err != nil {
-		log.Fatalf("Unable to execute the query. %v", err)
-	}
-	rows.Close()
-
-	for rows.Next() {
-		var userInfo UserInfo
-
-		// unmarshal the row object to stock
-		err = rows.Scan(&userInfo.ID, &userInfo.PW)
-		fmt.Print(userInfo)
-
-		if err != nil {
-			log.Fatalf("Unable to scan the row. %v", err)
-		}
-
-		// append the stock in the stocks slice
-		userInfos = append(userInfos, userInfo)
+	if err := godotenv.Load(); err != nil {
+		panic(err)
 	}
 
-	return userInfos, err
-}
+	var user UserInfo
+	row := db.QueryRow("SELECT * FROM userinfo WHERE id = ?", userInfo.ID)
 
-func GetUser(id string) (UserInfo, error) {
-	db := configs.CreateConnection()
-	defer db.Close()
-
-	var userInfo UserInfo
-
-	row := db.QueryRow("SELECT * FROM userinfo WHERE id = ?", id)
-
-	if err := row.Scan(&userInfo.ID, &userInfo.PW); err != nil {
+	if err := row.Scan(&user.ID, &user.PW); err != nil {
 		if err == sql.ErrNoRows {
-			return userInfo, fmt.Errorf("albumsById %s: no such user", id)
+			return nil, fmt.Errorf("%s: no such user", userInfo.ID)
 		}
-		return userInfo, fmt.Errorf("albumsById %s: %v", id, err)
+		return nil, fmt.Errorf("%s: %v", userInfo.ID, err)
 	}
 
-	return userInfo, nil
+	if err := godotenv.Load(); err != nil {
+		panic(err)
+	}
+	key := os.Getenv("BLOCK_KEY")
+
+	block, err := aes.NewCipher([]byte(key))
+
+	if err != nil {
+		return nil, fmt.Errorf("%s", err)
+	}
+
+	encryptPW := make([]byte, 16)
+	userInfo.PW = userInfo.PW + strings.Repeat(os.Getenv("CHAR_TO_FILL_BLANK"), 16-len(userInfo.PW))
+	block.Encrypt(encryptPW, []byte(userInfo.PW))
+
+	if hex.EncodeToString(encryptPW) != user.PW {
+		return nil, fmt.Errorf("%s", "invalid password")
+	}
+
+	value := map[string]string{
+		"name": user.ID,
+	}
+
+	var cookieHandler = securecookie.New(
+		securecookie.GenerateRandomKey(64),
+		securecookie.GenerateRandomKey(32))
+
+	encoded, err := cookieHandler.Encode("session", value)
+
+	if err != nil {
+		return nil, fmt.Errorf("%s", "undetected error")
+	}
+
+	cookie := &http.Cookie{
+		Name:  "session",
+		Value: encoded,
+		Path:  "/",
+	}
+
+	return cookie, nil
 }

@@ -47,25 +47,7 @@ h1 {
   display:flex;
   height: 86px;
 }
-.searchArea{
-  width:300px;
-  height:40px;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 5px;
-  margin-top:24px;
-}
-.searchArea > form > input{
-  border:none;
-  width:250px;
-  height:40px;
-  background: rgba(0, 0, 0, 0.0);
-  color:#fff;
-  padding-left:10px;
-}
-.searchArea > form > span{
-  width:50px;
-  color:#fff;
-}
+
 .nav{
   display: flex;
   justify-content: flex-end;
