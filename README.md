@@ -13,7 +13,6 @@
 </p>
 
 
-Frontend Desgined by Jay <br/>
-Backend built by Jaewon <br/>
+Built by Jay and Jaewon
 
-But have not integrated.
+Frontend and backend have not integrated.
